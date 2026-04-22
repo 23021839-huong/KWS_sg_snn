@@ -14,9 +14,9 @@ class Config:
     NUM_CLASSES = 12
     BETA = 0.95
 
-    BATCH_SIZE = 64       # Tăng batch size để training ổn hơn
-    LR = 1e-3             # Giảm từ 3e-3 → tránh loss dao động
-    EPOCHS = 30           # Tăng số epoch
-    WEIGHT_DECAY = 1e-4   # Regularization
+    BATCH_SIZE = 64       
+    LR = 1e-3            
+    EPOCHS = 30           
+    WEIGHT_DECAY = 1e-3  
 
-    TIME_STEPS = 50       # Tăng từ 25 → spike pattern có ý nghĩa hơn  
+    TIME_STEPS = 50    

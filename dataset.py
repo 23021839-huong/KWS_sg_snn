@@ -3,6 +3,7 @@ import torchaudio
 from torch.utils.data import Dataset, WeightedRandomSampler
 from collections import Counter
 from config import Config
+from transforms import LogMelTransform, pad
 import os
 
 class SpeechCommandsDataset(Dataset):
@@ -12,10 +13,15 @@ class SpeechCommandsDataset(Dataset):
             download=True,
             subset=subset
         )
+        self.subset = subset
+
         # 10 keyword chính + _silence_ + _unknown_
         self.labels = ['down', 'go', 'left', 'no', 'off', 'on', 'right', 'stop', 'up', 'yes', '_silence_', '_unknown_']
         self.label_to_index = {l: i for i, l in enumerate(self.labels)}
-        
+
+        # Transform nhất quán cho cả train lẫn val/test
+        self.transform = LogMelTransform(augment=(subset == "training"))
+
         # Precompute all labels để tạo sampler
         self._labels = []
         for i in range(len(self.dataset)):
@@ -25,7 +31,6 @@ class SpeechCommandsDataset(Dataset):
     def get_sampler(self):
         """WeightedRandomSampler để cân bằng class imbalance."""
         count = Counter(self._labels)
-        # Weight = 1 / frequency của từng class
         weights = [1.0 / count[l] for l in self._labels]
         return WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
 
@@ -55,11 +60,16 @@ class SpeechCommandsDataset(Dataset):
 
         if waveform.abs().max() > 0:
             waveform = waveform / waveform.abs().max()
-            
+
         return waveform
 
     def __getitem__(self, idx):
         waveform, sr, label, *_ = self.dataset[idx]
         waveform = self.preprocess(waveform, sr)
         label_idx = self._labels[idx]
-        return waveform, label_idx
+
+        # Transform ở đây — nhất quán giữa train và val/test
+        feature = self.transform(waveform)
+        feature = pad(feature)
+
+        return feature, label_idx

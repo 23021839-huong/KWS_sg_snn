@@ -10,10 +10,11 @@ import os
 if __name__ == '__main__':
     os.makedirs("checkpoints", exist_ok=True)
 
-    # Dataset
+    # Dataset — transform đã được nhúng vào Dataset
     train_set = SpeechCommandsDataset("training")
+    val_set   = SpeechCommandsDataset("validation")
     test_set  = SpeechCommandsDataset("testing")
-    # WeightedRandomSampler — giải quyết class imbalance
+
     sampler = train_set.get_sampler()
     class_weights = train_set.get_class_weights()
 
@@ -21,14 +22,21 @@ if __name__ == '__main__':
         train_set,
         batch_size=Config.BATCH_SIZE,
         sampler=sampler,
-        num_workers=0,        # Windows: phải để 0
+        num_workers=0,
+        pin_memory=False
+    )
+    val_loader = DataLoader(
+        val_set,
+        batch_size=Config.BATCH_SIZE,
+        shuffle=False,
+        num_workers=0,
         pin_memory=False
     )
     test_loader = DataLoader(
         test_set,
         batch_size=Config.BATCH_SIZE,
         shuffle=False,
-        num_workers=0,        # Windows: phải để 0
+        num_workers=0,
         pin_memory=False
     )
 
@@ -44,21 +52,33 @@ if __name__ == '__main__':
         optimizer, T_max=Config.EPOCHS, eta_min=1e-5
     )
 
-    print(f"Training on: {Config.DEVICE}")
-    print(f"Train samples: {len(train_set)} | Test samples: {len(test_set)}")
+    print(f"Training on : {Config.DEVICE}")
+    print(f"Train        : {len(train_set)} samples")
+    print(f"Validation   : {len(val_set)} samples")
+    print(f"Test         : {len(test_set)} samples")
 
     best_acc = 0
     for epoch in range(Config.EPOCHS):
         loss, train_acc = train_epoch(model, train_loader, optimizer, class_weights)
-        val_acc = evaluate(model, test_loader)
+        val_acc  = evaluate(model, val_loader)
         scheduler.step()
 
         lr_now = optimizer.param_groups[0]['lr']
-        print(f"Epoch {epoch+1:02d} | Loss={loss:.4f} | TrainAcc={train_acc:.4f} | ValAcc={val_acc:.4f} | LR={lr_now:.2e}")
+        print(
+            f"Epoch {epoch+1:02d} | "
+            f"Loss={loss:.4f} | "
+            f"TrainAcc={train_acc:.4f} | "
+            f"ValAcc={val_acc:.4f} | "
+            f"LR={lr_now:.2e}"
+        )
 
         if val_acc > best_acc:
             best_acc = val_acc
             torch.save(model.state_dict(), "checkpoints/best.pth")
             print(f"  --> Saved best model (ValAcc={best_acc:.4f})")
 
-    print(f"\nBest ValAcc: {best_acc:.4f}")
+    # Đánh giá cuối cùng trên test set
+    model.load_state_dict(torch.load("checkpoints/best.pth"))
+    test_acc = evaluate(model, test_loader)
+    print(f"\nBest ValAcc  : {best_acc:.4f}")
+    print(f"Test Acc     : {test_acc:.4f}")
